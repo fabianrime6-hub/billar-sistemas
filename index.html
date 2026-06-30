@@ -183,6 +183,19 @@ td:first-child{font-family:'JetBrains Mono',monospace;color:var(--accent);font-w
 .btn-save{background:var(--accent);border:none;border-radius:8px;padding:9px 20px;color:#000;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;}
 .btn-save:disabled{opacity:.5;cursor:not-allowed;}
 .empty{grid-column:1/-1;padding:48px;text-align:center;color:var(--muted);font-size:13px;}
+
+/* CATEGORY MANAGEMENT */
+.nav-manage{padding:7px 8px;border-radius:6px;cursor:pointer;font-size:11px;color:var(--muted);margin-top:10px;border-top:1px solid var(--border);padding-top:12px;transition:color .12s;white-space:nowrap;}
+.nav-manage:hover{color:var(--accent);}
+aside.collapsed .nav-manage{opacity:0;pointer-events:none;}
+.cat-row{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--surface);}
+.cat-row input[type="text"].cat-icon-input{width:40px;text-align:center;padding:6px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:15px;}
+.cat-row input[type="text"].cat-name-input{flex:1;padding:6px 10px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;}
+.cat-row-actions{display:flex;gap:4px;flex-shrink:0;}
+.cat-icon-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:5px;border-radius:5px;transition:all .12s;}
+.cat-icon-btn:hover{background:var(--accent-dim);color:var(--accent);}
+.cat-icon-btn.danger:hover{background:rgba(255,79,106,.12);color:var(--red);}
+.cat-count-badge{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -205,24 +218,8 @@ td:first-child{font-family:'JetBrains Mono',monospace;color:var(--accent);font-w
     <div class="nav-item active" onclick="filterCat('all',this)">
       <span class="nav-icon">🎱</span><span class="nav-text">Todos</span><span class="count" id="cAll">—</span>
     </div>
-    <div class="nav-item" onclick="filterCat('cinco-y-medio',this)">
-      <span class="nav-icon">5½</span><span class="nav-text">5½ Sistema</span><span class="count" id="cCinco">—</span>
-    </div>
-    <div class="nav-item" onclick="filterCat('bola',this)">
-      <span class="nav-icon">🔵</span><span class="nav-text">Sistema Bola</span><span class="count" id="cBola">—</span>
-    </div>
-    <div class="nav-item" onclick="filterCat('banda',this)">
-      <span class="nav-icon">↗</span><span class="nav-text">Banda/Bricole</span><span class="count" id="cBanda">—</span>
-    </div>
-    <div class="nav-item" onclick="filterCat('efecto',this)">
-      <span class="nav-icon">🌀</span><span class="nav-text">Efecto/Spin</span><span class="count" id="cEfecto">—</span>
-    </div>
-    <div class="nav-item" onclick="filterCat('doble',this)">
-      <span class="nav-icon">↩</span><span class="nav-text">Doble banda</span><span class="count" id="cDoble">—</span>
-    </div>
-    <div class="nav-item" onclick="filterCat('otro',this)">
-      <span class="nav-icon">📌</span><span class="nav-text">Otros</span><span class="count" id="cOtro">—</span>
-    </div>
+    <div id="navCats"></div>
+    <div class="nav-manage" onclick="openCatManager()">⚙ Gestionar categorías</div>
   </aside>
 
   <main>
@@ -256,14 +253,7 @@ td:first-child{font-family:'JetBrains Mono',monospace;color:var(--accent);font-w
     <div class="field"><label>Nombre del sistema</label><input type="text" id="fNombre" placeholder="Ej: 5 corta efecto 1"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field"><label>Categoría</label>
-        <select id="fCategoria">
-          <option value="cinco-y-medio">5½ Sistema</option>
-          <option value="bola">Sistema Bola</option>
-          <option value="banda">Banda / Bricole</option>
-          <option value="efecto">Efecto / Spin</option>
-          <option value="doble">Doble banda</option>
-          <option value="otro">Otro</option>
-        </select>
+        <select id="fCategoria"></select>
       </div>
       <div class="field"><label>Efecto principal</label><input type="text" id="fEfecto" placeholder="Efecto 1 / Jale…"></div>
     </div>
@@ -283,6 +273,25 @@ td:first-child{font-family:'JetBrains Mono',monospace;color:var(--accent);font-w
   </div>
 </div>
 
+<!-- MODAL GESTIÓN DE CATEGORÍAS -->
+<div class="modal-overlay" id="catModalOverlay" onclick="closeCatModalOutside(event)">
+  <div class="modal" style="max-width:480px">
+    <h2>Gestionar categorías</h2>
+    <div class="modal-sub">Edita el ícono o nombre, elimina las que no uses, o agrega nuevas.</div>
+    <div id="catList" style="margin-bottom:16px"></div>
+    <hr class="divider">
+    <div class="sec-label">Nueva categoría</div>
+    <div style="display:grid;grid-template-columns:70px 1fr;gap:10px;margin-bottom:12px">
+      <input type="text" id="newCatIcono" placeholder="📌" maxlength="3" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);text-align:center;font-size:16px">
+      <input type="text" id="newCatNombre" placeholder="Nombre de la categoría">
+    </div>
+    <button class="btn-sm" style="width:100%;justify-content:center" onclick="addCategoria()">＋ Agregar categoría</button>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeCatManager()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -293,7 +302,7 @@ const db = createClient(SUPA_URL, SUPA_KEY);
 const BUCKET = 'imagenes';
 
 // ── STATE ──────────────────────────────────────────────────────
-let cards = [], expandedId = null, subsysTabMap = {}, secTabMap = {};
+let cards = [], categorias = [], expandedId = null, subsysTabMap = {}, secTabMap = {};
 let curCat = 'all', curEf = 'all', searchQ = '';
 let editingId = null;
 
@@ -323,6 +332,11 @@ function toast(msg, type='ok') {
 
 // ── LOAD ───────────────────────────────────────────────────────
 async function loadAll() {
+  const { data: cats, error: catErr } = await db.from('categorias').select('*').order('orden', { ascending: true });
+  if (catErr) { toast('Error cargando categorías','err'); }
+  categorias = cats || [];
+  renderSidebar(); renderCatSelect();
+
   const { data: sistemas, error } = await db.from('sistemas').select(`
     id, nombre, categoria, efecto, formula, created_at,
     secciones (
@@ -379,8 +393,8 @@ function filterCat(cat, el) {
   curCat = cat; expandedId = null;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   el.classList.add('active');
-  const t={all:'Todos los sistemas','cinco-y-medio':'5½ Sistema',bola:'Sistema Bola',banda:'Banda / Bricole',efecto:'Efecto / Spin',doble:'Doble banda',otro:'Otros'};
-  document.getElementById('sectionTitle').textContent = t[cat]||cat;
+  const found = categorias.find(c => c.slug === cat);
+  document.getElementById('sectionTitle').textContent = cat === 'all' ? 'Todos los sistemas' : (found ? found.nombre : cat);
   render();
 }
 function filterEf(ef, el) {
@@ -393,8 +407,24 @@ function filterCards() { searchQ = document.getElementById('searchInput').value;
 // ── RENDER ─────────────────────────────────────────────────────
 function updCounts() {
   document.getElementById('cAll').textContent = cards.length;
-  [['Cinco','cinco-y-medio'],['Bola','bola'],['Banda','banda'],['Efecto','efecto'],['Doble','doble'],['Otro','otro']]
-    .forEach(([k,v])=>{ const el=document.getElementById('c'+k); if(el) el.textContent=cards.filter(c=>c.categoria===v).length; });
+  categorias.forEach(cat => {
+    const el = document.getElementById('cCat'+cat.id);
+    if (el) el.textContent = cards.filter(c => c.categoria === cat.slug).length;
+  });
+}
+
+// ── SIDEBAR / SELECT (dinámico desde tabla categorias) ────────
+function renderSidebar() {
+  const wrap = document.getElementById('navCats');
+  wrap.innerHTML = categorias.map(cat => `
+    <div class="nav-item" onclick="filterCat('${cat.slug}',this)">
+      <span class="nav-icon">${cat.icono||'📌'}</span><span class="nav-text">${cat.nombre}</span><span class="count" id="cCat${cat.id}">—</span>
+    </div>`).join('');
+  updCounts();
+}
+function renderCatSelect() {
+  const sel = document.getElementById('fCategoria');
+  sel.innerHTML = categorias.map(cat => `<option value="${cat.slug}">${cat.nombre}</option>`).join('');
 }
 
 function render() {
@@ -406,7 +436,8 @@ function render() {
 
   grid.innerHTML = filtered.map(c => {
     const isOpen = expandedId === c.id;
-    const catL = {'cinco-y-medio':'5½',bola:'Bola',banda:'Banda',efecto:'Efecto',doble:'Doble',otro:'Otro'}[c.categoria]||c.categoria;
+    const catObj = categorias.find(cat => cat.slug === c.categoria);
+    const catL = catObj ? catObj.nombre : (c.categoria || '—');
     const subs = c.subsistemas || [];
     const totalSecs = subs.reduce((a,s)=>a+s.secciones.length,0);
     const activeSub = subsysTabMap[c.id] || 0;
@@ -495,6 +526,79 @@ async function delCard(id, e) {
   if (error) { toast('Error al eliminar','err'); return; }
   cards = cards.filter(c=>c.id!==id);
   expandedId=null; render(); toast('Ficha eliminada');
+}
+
+// ── GESTIÓN DE CATEGORÍAS ──────────────────────────────────────
+function slugify(str) {
+  return str.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || ('cat-'+Date.now());
+}
+function openCatManager() {
+  renderCatList();
+  document.getElementById('catModalOverlay').classList.add('open');
+}
+function closeCatManager() { document.getElementById('catModalOverlay').classList.remove('open'); }
+function closeCatModalOutside(e) { if (e.target.id === 'catModalOverlay') closeCatManager(); }
+
+function renderCatList() {
+  const wrap = document.getElementById('catList');
+  if (!categorias.length) { wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;font-style:italic">Aún no hay categorías. Agrega la primera abajo.</div>'; return; }
+  wrap.innerHTML = categorias.map(cat => {
+    const n = cards.filter(c=>c.categoria===cat.slug).length;
+    return `<div class="cat-row">
+      <input type="text" class="cat-icon-input" id="catIco${cat.id}" value="${cat.icono||''}" maxlength="3">
+      <input type="text" class="cat-name-input" id="catNom${cat.id}" value="${cat.nombre}">
+      <span class="cat-count-badge">${n} ficha${n!==1?'s':''}</span>
+      <div class="cat-row-actions">
+        <button class="cat-icon-btn" title="Guardar" onclick="saveCategoria(${cat.id})">💾</button>
+        <button class="cat-icon-btn danger" title="Eliminar" onclick="deleteCategoria(${cat.id})">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addCategoria() {
+  const nombre = document.getElementById('newCatNombre').value.trim();
+  const icono = document.getElementById('newCatIcono').value.trim() || '📌';
+  if (!nombre) { toast('Escribe un nombre','err'); return; }
+  const slug = slugify(nombre);
+  if (categorias.some(c=>c.slug===slug)) { toast('Ya existe una categoría similar','err'); return; }
+  const orden = categorias.length ? Math.max(...categorias.map(c=>c.orden||0))+1 : 1;
+  const { data, error } = await db.from('categorias').insert({ slug, nombre, icono, orden }).select().single();
+  if (error) { toast('Error al agregar categoría','err'); return; }
+  categorias.push(data);
+  document.getElementById('newCatNombre').value=''; document.getElementById('newCatIcono').value='';
+  renderSidebar(); renderCatSelect(); renderCatList();
+  toast('Categoría agregada');
+}
+
+async function saveCategoria(id) {
+  const nombre = document.getElementById('catNom'+id).value.trim();
+  const icono = document.getElementById('catIco'+id).value.trim() || '📌';
+  if (!nombre) { toast('El nombre no puede estar vacío','err'); return; }
+  const { error } = await db.from('categorias').update({ nombre, icono }).eq('id', id);
+  if (error) { toast('Error al guardar','err'); return; }
+  const cat = categorias.find(c=>c.id===id);
+  cat.nombre = nombre; cat.icono = icono;
+  renderSidebar(); renderCatSelect(); render();
+  toast('Categoría actualizada');
+}
+
+async function deleteCategoria(id) {
+  const cat = categorias.find(c=>c.id===id);
+  if (!cat) return;
+  const n = cards.filter(c=>c.categoria===cat.slug).length;
+  const msg = n > 0
+    ? `Hay ${n} ficha${n!==1?'s':''} usando "${cat.nombre}". Si la eliminas, esas fichas quedarán sin categoría visible. ¿Eliminar de todos modos?`
+    : `¿Eliminar la categoría "${cat.nombre}"?`;
+  if (!confirm(msg)) return;
+  const { error } = await db.from('categorias').delete().eq('id', id);
+  if (error) { toast('Error al eliminar categoría','err'); return; }
+  categorias = categorias.filter(c=>c.id!==id);
+  if (curCat === cat.slug) { curCat = 'all'; document.getElementById('sectionTitle').textContent = 'Todos los sistemas'; }
+  renderSidebar(); renderCatSelect(); renderCatList(); render();
+  toast('Categoría eliminada');
 }
 
 // ── MODAL ──────────────────────────────────────────────────────
