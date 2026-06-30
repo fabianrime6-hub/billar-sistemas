@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Billar — Fichas de Sistema</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+:root{
+  --bg:#0d0f14;--surface:#161a22;--card:#1c2130;--border:#262d3d;
+  --accent:#00e5a0;--accent-dim:rgba(0,229,160,0.12);
+  --text:#e8eaf0;--muted:#6b7694;--tag-bg:#1e2a3a;--tag-text:#4f8eff;--red:#ff4f6a;
+  --aside-w:200px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;min-height:100vh;}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;z-index:999;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.ok{border-color:var(--accent);color:var(--accent);}
+.toast.err{border-color:var(--red);color:var(--red);}
+
+/* LOADER */
+.loader{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--muted);font-size:13px;gap:10px;grid-column:1/-1;}
+.spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* HEADER */
+header{border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;background:var(--bg);z-index:100;gap:16px;}
+.logo{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}
+.logo span{color:var(--muted);}
+.search-wrap{flex:1;max-width:400px;position:relative;}
+.search-wrap input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 14px 8px 36px;color:var(--text);font-family:'Inter',sans-serif;font-size:13px;outline:none;transition:border-color .15s;}
+.search-wrap input:focus{border-color:var(--accent);}
+.search-wrap input::placeholder{color:var(--muted);}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px;}
+.add-btn{background:var(--accent);color:#000;border:none;border-radius:8px;padding:8px 16px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;transition:opacity .15s;}
+.add-btn:hover{opacity:.85;}
+.add-btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* LAYOUT */
+.layout{display:flex;min-height:calc(100vh - 56px);}
+
+/* SIDEBAR */
+aside{
+  width:var(--aside-w);flex-shrink:0;border-right:1px solid var(--border);
+  padding:16px 10px;transition:width .22s ease,padding .22s ease;
+  overflow:hidden;position:relative;
+}
+aside.collapsed{width:44px;padding:16px 6px;}
+
+.sidebar-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:0 4px;}
+.sidebar-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;transition:opacity .15s;}
+aside.collapsed .sidebar-label{opacity:0;}
+aside.collapsed .nav-text{display:none;}
+aside.collapsed .count{display:none;}
+
+.collapse-btn{background:none;border:1px solid var(--border);border-radius:6px;width:26px;height:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;flex-shrink:0;transition:border-color .15s,color .15s;}
+.collapse-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+.nav-item{padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px;transition:background .12s,color .12s;margin-bottom:2px;white-space:nowrap;}
+.nav-item:hover{background:var(--surface);color:var(--text);}
+.nav-item.active{background:var(--accent-dim);color:var(--accent);}
+.nav-icon{font-size:15px;flex-shrink:0;}
+.count{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);}
+
+/* MAIN */
+main{flex:1;padding:24px 28px;overflow-y:auto;min-width:0;}
+.section-header{display:flex;align-items:baseline;gap:12px;margin-bottom:18px;}
+.section-title{font-size:18px;font-weight:600;}
+.section-count{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);}
+.filters{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+.chip{padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid var(--border);color:var(--muted);background:transparent;font-family:'Inter',sans-serif;transition:all .12s;}
+.chip:hover{border-color:var(--accent);color:var(--text);}
+.chip.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+
+/* GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px;}
+
+/* CARD */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .15s;}
+.card:hover{border-color:rgba(0,229,160,.4);}
+.card.expanded{border-color:var(--accent);grid-column:1/-1;}
+.card-thumb{width:100%;height:155px;object-fit:cover;display:block;cursor:pointer;}
+.card-thumb-placeholder{width:100%;height:155px;background:linear-gradient(135deg,#111620 0%,#1a2035 100%);display:flex;align-items:center;justify-content:center;font-size:32px;opacity:.4;cursor:pointer;}
+.card-body{padding:13px 15px;cursor:pointer;}
+.card-tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px;}
+.tag{background:var(--tag-bg);color:var(--tag-text);font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:3px 7px;border-radius:4px;}
+.tag.green{background:var(--accent-dim);color:var(--accent);}
+.tag.gray{background:rgba(255,255,255,.05);color:var(--muted);}
+.card-title{font-size:15px;font-weight:600;margin-bottom:5px;}
+.card-meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;}
+
+/* DETAIL */
+.detail{display:none;border-top:1px solid var(--border);}
+.detail.open{display:block;}
+
+/* SUBSYSTEM SELECTOR */
+.subsys-bar{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2);padding:0 16px;overflow-x:auto;}
+.subsys-tab{padding:9px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s,border-color .15s;flex-shrink:0;text-transform:uppercase;letter-spacing:.04em;}
+.subsys-tab:hover{color:var(--text);}
+.subsys-tab.active{color:var(--accent2,#4f8eff);border-bottom-color:var(--accent2,#4f8eff);}
+.subsys-add{padding:9px 12px;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;flex-shrink:0;transition:color .15s;}
+.subsys-add:hover{color:var(--accent);}
+
+/* SECTION TABS */
+.tabs{display:flex;border-bottom:1px solid var(--border);overflow-x:auto;padding:0 16px;background:var(--surface);}
+.tab{padding:10px 15px;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s,border-color .15s;flex-shrink:0;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-edit{padding:10px 12px;font-size:12px;color:var(--muted);cursor:pointer;margin-left:auto;flex-shrink:0;transition:color .15s;}
+.tab-edit:hover{color:var(--accent);}
+
+/* SECTION CONTENT */
+.sec-content{padding:20px;}
+.sec-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
+@media(max-width:700px){.sec-layout{grid-template-columns:1fr;}}
+.sec-img-box{border-radius:8px;overflow:hidden;background:#111620;min-height:180px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);}
+.sec-img-box img{width:100%;display:block;cursor:zoom-in;}
+.sec-img-placeholder{color:var(--muted);font-size:12px;text-align:center;padding:20px;line-height:1.8;}
+
+.fuente-link{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--tag-text);background:var(--tag-bg);border-radius:6px;padding:5px 10px;text-decoration:none;margin-bottom:12px;transition:background .15s;}
+.fuente-link:hover{background:#243048;}
+.fuente-link svg{flex-shrink:0;}
+
+table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;}
+th{text-align:left;padding:7px 10px;background:var(--surface);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:600;border-bottom:1px solid var(--border);}
+td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+td:first-child{font-family:'JetBrains Mono',monospace;color:var(--accent);font-weight:600;}
+.key-points h4{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px;font-weight:600;}
+.kp{display:flex;gap:8px;margin-bottom:6px;font-size:12px;line-height:1.5;}
+.kp::before{content:'•';color:var(--accent);flex-shrink:0;}
+
+.card-actions{display:flex;gap:8px;padding:10px 20px;border-top:1px solid var(--border);background:var(--surface);}
+.btn-sm{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .12s;}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent);}
+.btn-sm.danger:hover{border-color:var(--red);color:var(--red);}
+.btn-sm:disabled{opacity:.4;cursor:not-allowed;}
+
+/* LIGHTBOX */
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:500;align-items:center;justify-content:center;cursor:zoom-out;}
+.lightbox.open{display:flex;}
+.lightbox img{max-width:95vw;max-height:93vh;border-radius:8px;object-fit:contain;}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:300;align-items:flex-start;justify-content:center;padding:28px 16px;overflow-y:auto;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:660px;padding:24px;}
+.modal h2{font-size:16px;font-weight:600;margin-bottom:4px;}
+.modal-sub{font-size:12px;color:var(--muted);margin-bottom:20px;}
+.field{margin-bottom:15px;}
+.field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:6px;}
+.field input,.field textarea,.field select{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:13px;outline:none;transition:border-color .15s;}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent);}
+.field textarea{resize:vertical;min-height:68px;line-height:1.6;}
+.hint{font-size:11px;color:var(--muted);margin-top:4px;}
+.divider{border:none;border-top:1px solid var(--border);margin:18px 0;}
+.sec-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:10px;}
+
+/* SUBSYS EDITOR TABS */
+.modal-subsys-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:10px;}
+.modal-subsys-tab{padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid var(--border);color:var(--muted);background:transparent;font-family:'Inter',sans-serif;transition:all .12s;}
+.modal-subsys-tab:hover{border-color:var(--accent2,#4f8eff);color:var(--text);}
+.modal-subsys-tab.active{border-color:var(--accent2,#4f8eff);color:var(--accent2,#4f8eff);background:rgba(79,142,255,.1);}
+.modal-subsys-add{padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:1px dashed var(--border);color:var(--muted);background:transparent;font-family:'Inter',sans-serif;transition:all .12s;}
+.modal-subsys-add:hover{border-color:var(--accent);color:var(--accent);}
+
+.sec-editor{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:15px;margin-bottom:10px;}
+.sec-editor-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.sec-editor-name{font-size:13px;font-weight:600;color:var(--accent);}
+.sec-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;padding:0 4px;border-radius:4px;transition:color .12s;}
+.sec-remove:hover{color:var(--red);}
+.upload-zone{border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:border-color .15s;color:var(--muted);font-size:13px;}
+.upload-zone:hover{border-color:var(--accent);color:var(--text);}
+.sec-img-prev{width:100%;border-radius:6px;margin-top:8px;}
+.add-sec-btn{width:100%;padding:9px;border:2px dashed var(--border);border-radius:8px;background:transparent;color:var(--muted);font-family:'Inter',sans-serif;font-size:13px;cursor:pointer;transition:all .12s;margin-bottom:14px;}
+.add-sec-btn:hover{border-color:var(--accent);color:var(--accent);}
+.modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;}
+.btn-cancel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 18px;color:var(--muted);font-family:'Inter',sans-serif;font-size:13px;cursor:pointer;}
+.btn-save{background:var(--accent);border:none;border-radius:8px;padding:9px 20px;color:#000;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;}
+.btn-save:disabled{opacity:.5;cursor:not-allowed;}
+.empty{grid-column:1/-1;padding:48px;text-align:center;color:var(--muted);font-size:13px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Billar<span>/</span>Sistemas</div>
+  <div class="search-wrap">
+    <span class="search-icon">⌕</span>
+    <input type="text" id="searchInput" placeholder="Buscar sistema, efecto, zona…" oninput="filterCards()">
+  </div>
+  <button class="add-btn" onclick="openModal()">＋ Nueva ficha</button>
+</header>
+
+<div class="layout">
+  <aside id="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-label">Categorías</div>
+      <button class="collapse-btn" onclick="toggleSidebar()" title="Colapsar">◀</button>
+    </div>
+    <div class="nav-item active" onclick="filterCat('all',this)">
+      <span class="nav-icon">🎱</span><span class="nav-text">Todos</span><span class="count" id="cAll">—</span>
+    </div>
+    <div class="nav-item" onclick="filterCat('cinco-y-medio',this)">
+      <span class="nav-icon">5½</span><span class="nav-text">5½ Sistema</span><span class="count" id="cCinco">—</span>
+    </div>
+    <div class="nav-item" onclick="filterCat('bola',this)">
+      <span class="nav-icon">🔵</span><span class="nav-text">Sistema Bola</span><span class="count" id="cBola">—</span>
+    </div>
+    <div class="nav-item" onclick="filterCat('banda',this)">
+      <span class="nav-icon">↗</span><span class="nav-text">Banda/Bricole</span><span class="count" id="cBanda">—</span>
+    </div>
+    <div class="nav-item" onclick="filterCat('efecto',this)">
+      <span class="nav-icon">🌀</span><span class="nav-text">Efecto/Spin</span><span class="count" id="cEfecto">—</span>
+    </div>
+    <div class="nav-item" onclick="filterCat('doble',this)">
+      <span class="nav-icon">↩</span><span class="nav-text">Doble banda</span><span class="count" id="cDoble">—</span>
+    </div>
+    <div class="nav-item" onclick="filterCat('otro',this)">
+      <span class="nav-icon">📌</span><span class="nav-text">Otros</span><span class="count" id="cOtro">—</span>
+    </div>
+  </aside>
+
+  <main>
+    <div class="section-header">
+      <div class="section-title" id="sectionTitle">Todos los sistemas</div>
+      <div class="section-count" id="sectionCount"></div>
+    </div>
+    <div class="filters">
+      <button class="chip active" onclick="filterEf('all',this)">Todo</button>
+      <button class="chip" onclick="filterEf('efecto 1',this)">Efecto 1</button>
+      <button class="chip" onclick="filterEf('efecto 2',this)">Efecto 2</button>
+      <button class="chip" onclick="filterEf('jale',this)">Jale</button>
+      <button class="chip" onclick="filterEf('natural',this)">Natural</button>
+    </div>
+    <div class="grid" id="cardGrid">
+      <div class="loader"><div class="spin"></div> Cargando fichas…</div>
+    </div>
+  </main>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <img id="lbImg" src="">
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <h2 id="modalTitle">Nueva ficha de sistema</h2>
+    <div class="modal-sub">Un sistema puede tener subsistemas, y cada subsistema tiene sus propias secciones/posiciones</div>
+
+    <div class="field"><label>Nombre del sistema</label><input type="text" id="fNombre" placeholder="Ej: 5 corta efecto 1"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field"><label>Categoría</label>
+        <select id="fCategoria">
+          <option value="cinco-y-medio">5½ Sistema</option>
+          <option value="bola">Sistema Bola</option>
+          <option value="banda">Banda / Bricole</option>
+          <option value="efecto">Efecto / Spin</option>
+          <option value="doble">Doble banda</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="field"><label>Efecto principal</label><input type="text" id="fEfecto" placeholder="Efecto 1 / Jale…"></div>
+    </div>
+    <div class="field"><label>Fórmula general</label><input type="text" id="fFormula" placeholder="Ej: 1 tip = 5 puntos de apertura"></div>
+
+    <hr class="divider">
+
+    <!-- SUBSYSTEM TABS IN MODAL -->
+    <div class="sec-label">Subsistemas</div>
+    <div class="modal-subsys-tabs" id="modalSubsysTabs"></div>
+    <div id="modalSubsysContent"></div>
+
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" id="btnSave" onclick="saveCard()">Guardar ficha</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPA_URL = 'https://xarqmlqullkkmwogbvnl.supabase.co';
+const SUPA_KEY = 'sb_publishable_3jo8Wfz14dj9mcFPJ6G8vg_hVnd92ET';
+const { createClient } = supabase;
+const db = createClient(SUPA_URL, SUPA_KEY);
+const BUCKET = 'imagenes';
+
+// ── STATE ──────────────────────────────────────────────────────
+let cards = [], expandedId = null, subsysTabMap = {}, secTabMap = {};
+let curCat = 'all', curEf = 'all', searchQ = '';
+let editingId = null;
+
+// Modal editor state: array of subsystems, each has { nombre, secciones[] }
+// secciones[]: { titulo, fuente, tabla_text, puntos_text, imgData, existingUrl }
+let editorSubsys = [];
+let activeSubsysIdx = 0;
+let secCounter = 0;
+
+// ── SIDEBAR COLLAPSE ───────────────────────────────────────────
+let sidebarCollapsed = false;
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  const aside = document.getElementById('sidebar');
+  const btn = aside.querySelector('.collapse-btn');
+  aside.classList.toggle('collapsed', sidebarCollapsed);
+  btn.textContent = sidebarCollapsed ? '▶' : '◀';
+  btn.title = sidebarCollapsed ? 'Expandir' : 'Colapsar';
+}
+
+// ── TOAST ──────────────────────────────────────────────────────
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast show ' + type;
+  setTimeout(() => el.className = 'toast', 3000);
+}
+
+// ── LOAD ───────────────────────────────────────────────────────
+async function loadAll() {
+  const { data: sistemas, error } = await db.from('sistemas').select(`
+    id, nombre, categoria, efecto, formula, created_at,
+    secciones (
+      id, titulo, puntos, orden, fuente, subsistema,
+      tabla_filas (id, pos, grosor, efecto, ajuste, orden),
+      imagenes (id, url, orden)
+    )
+  `).order('created_at', { ascending: false });
+
+  if (error) { toast('Error cargando datos', 'err'); return; }
+
+  cards = (sistemas || []).map(s => {
+    const allSecs = (s.secciones || []).sort((a,b) => a.orden - b.orden).map(sec => ({
+      ...sec,
+      tabla: (sec.tabla_filas || []).sort((a,b)=>a.orden-b.orden),
+      imagen: (sec.imagenes || []).sort((a,b)=>a.orden-b.orden)[0]?.url || null
+    }));
+
+    // Group by subsistema
+    const subsMap = {};
+    allSecs.forEach(sec => {
+      const key = sec.subsistema || 'Principal';
+      if (!subsMap[key]) subsMap[key] = [];
+      subsMap[key].push(sec);
+    });
+    const subsistemas = Object.entries(subsMap).map(([nombre, secciones]) => ({ nombre, secciones }));
+
+    return { ...s, subsistemas };
+  });
+  render();
+}
+
+// ── FILTERS ────────────────────────────────────────────────────
+function getFiltered() {
+  return cards.filter(c => {
+    const mc = curCat === 'all' || c.categoria === curCat;
+    const me = curEf === 'all' || (c.efecto||'').toLowerCase().includes(curEf);
+    const q = searchQ.toLowerCase();
+    const mq = !q || c.nombre.toLowerCase().includes(q)
+      || (c.efecto||'').toLowerCase().includes(q)
+      || (c.formula||'').toLowerCase().includes(q)
+      || (c.subsistemas||[]).some(sub =>
+          sub.nombre.toLowerCase().includes(q) ||
+          (sub.secciones||[]).some(s =>
+            (s.titulo||'').toLowerCase().includes(q) ||
+            (s.puntos||[]).some(p=>p.toLowerCase().includes(q))
+          )
+        );
+    return mc && me && mq;
+  });
+}
+
+function filterCat(cat, el) {
+  curCat = cat; expandedId = null;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  const t={all:'Todos los sistemas','cinco-y-medio':'5½ Sistema',bola:'Sistema Bola',banda:'Banda / Bricole',efecto:'Efecto / Spin',doble:'Doble banda',otro:'Otros'};
+  document.getElementById('sectionTitle').textContent = t[cat]||cat;
+  render();
+}
+function filterEf(ef, el) {
+  curEf = ef;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active'); render();
+}
+function filterCards() { searchQ = document.getElementById('searchInput').value; expandedId=null; render(); }
+
+// ── RENDER ─────────────────────────────────────────────────────
+function updCounts() {
+  document.getElementById('cAll').textContent = cards.length;
+  [['Cinco','cinco-y-medio'],['Bola','bola'],['Banda','banda'],['Efecto','efecto'],['Doble','doble'],['Otro','otro']]
+    .forEach(([k,v])=>{ const el=document.getElementById('c'+k); if(el) el.textContent=cards.filter(c=>c.categoria===v).length; });
+}
+
+function render() {
+  const filtered = getFiltered();
+  document.getElementById('sectionCount').textContent = filtered.length + ' fichas';
+  updCounts();
+  const grid = document.getElementById('cardGrid');
+  if (!filtered.length) { grid.innerHTML='<div class="empty">No hay fichas que coincidan.</div>'; return; }
+
+  grid.innerHTML = filtered.map(c => {
+    const isOpen = expandedId === c.id;
+    const catL = {'cinco-y-medio':'5½',bola:'Bola',banda:'Banda',efecto:'Efecto',doble:'Doble',otro:'Otro'}[c.categoria]||c.categoria;
+    const subs = c.subsistemas || [];
+    const totalSecs = subs.reduce((a,s)=>a+s.secciones.length,0);
+    const activeSub = subsysTabMap[c.id] || 0;
+    const activeSubData = subs[activeSub] || subs[0] || { nombre:'—', secciones:[] };
+    const activeSecIdx = secTabMap[`${c.id}-${activeSub}`] || 0;
+    const sec = activeSubData.secciones[activeSecIdx] || {};
+    const thumb = subs.flatMap(s=>s.secciones).find(s=>s.imagen)?.imagen || null;
+
+    // Subsystem bar
+    const subsBar = subs.length > 1 ? `
+      <div class="subsys-bar">
+        ${subs.map((s,i)=>`<div class="subsys-tab ${i===activeSub?'active':''}" onclick="setSubsys(${c.id},${i},event)">${s.nombre}</div>`).join('')}
+      </div>` : '';
+
+    // Section tabs
+    const tabsHtml = activeSubData.secciones.map((s,i)=>
+      `<div class="tab ${i===activeSecIdx?'active':''}" onclick="setSec(${c.id},${activeSub},${i},event)">${s.titulo||'Sección '+(i+1)}</div>`
+    ).join('') + (isOpen ? `<div class="tab-edit" onclick="openEdit(${c.id},event)">✏️ Editar</div>` : '');
+
+    // Fuente link
+    const fuenteHtml = sec.fuente ? `
+      <a class="fuente-link" href="${sec.fuente}" target="_blank" rel="noopener">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 1.96C5.12 20 12 20 12 20s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/></svg>
+        Ver video fuente
+      </a>` : '';
+
+    const rows = (sec.tabla||[]).map(r=>`<tr><td>${r.pos||''}</td><td>${r.grosor||''}</td><td>${r.efecto||''}</td><td>${r.ajuste||''}</td></tr>`).join('');
+    const kps = (sec.puntos||[]).map(p=>`<div class="kp">${p}</div>`).join('');
+    const imgHtml = sec.imagen
+      ? `<div class="sec-img-box"><img src="${sec.imagen}" onclick="openLB('${sec.imagen}',event)" loading="lazy"></div>`
+      : `<div class="sec-img-box"><div class="sec-img-placeholder">📷<br>Sin imagen<br><small style="opacity:.6">Edita para agregar</small></div></div>`;
+
+    return `<div class="card ${isOpen?'expanded':''}" id="card-${c.id}">
+      ${thumb?`<img class="card-thumb" src="${thumb}" onclick="toggle(${c.id})" loading="lazy">`:`<div class="card-thumb-placeholder" onclick="toggle(${c.id})">🎱</div>`}
+      <div class="card-body" onclick="toggle(${c.id})">
+        <div class="card-tags">
+          <span class="tag">${catL}</span>
+          <span class="tag green">${c.efecto||'—'}</span>
+          ${subs.length>1?`<span class="tag" style="background:rgba(79,142,255,.12);color:#4f8eff">${subs.length} subsistemas</span>`:''}
+          <span class="tag gray">${totalSecs} sección${totalSecs!==1?'es':''}</span>
+        </div>
+        <div class="card-title">${c.nombre}</div>
+        <div class="card-meta">${c.formula||'—'}</div>
+      </div>
+      <div class="detail ${isOpen?'open':''}">
+        ${subsBar}
+        <div class="tabs">${tabsHtml}</div>
+        <div class="sec-content">
+          ${fuenteHtml}
+          <div class="sec-layout">
+            ${imgHtml}
+            <div>
+              <table>
+                <thead><tr><th>Posición</th><th>Grosor/Toque</th><th>Efecto</th><th>Ajuste</th></tr></thead>
+                <tbody>${rows||'<tr><td colspan="4" style="color:var(--muted);font-style:italic">Sin datos</td></tr>'}</tbody>
+              </table>
+              <div class="key-points"><h4>Puntos clave</h4>${kps||'<span style="color:var(--muted);font-size:12px">Sin puntos aún</span>'}</div>
+            </div>
+          </div>
+        </div>
+        <div class="card-actions">
+          <button class="btn-sm" onclick="openEdit(${c.id},event)">✏️ Editar ficha</button>
+          <button class="btn-sm danger" onclick="delCard(${c.id},event)">🗑 Eliminar</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggle(id) {
+  expandedId = expandedId===id ? null : id;
+  if (expandedId && !subsysTabMap[expandedId]) subsysTabMap[expandedId]=0;
+  render();
+  if (expandedId) setTimeout(()=>document.getElementById('card-'+id)?.scrollIntoView({behavior:'smooth',block:'nearest'}),60);
+}
+function setSubsys(cardId, idx, e) { e.stopPropagation(); subsysTabMap[cardId]=idx; render(); }
+function setSec(cardId, subIdx, secIdx, e) { e.stopPropagation(); secTabMap[`${cardId}-${subIdx}`]=secIdx; render(); }
+function openLB(src,e) { e&&e.stopPropagation(); document.getElementById('lbImg').src=src; document.getElementById('lightbox').classList.add('open'); }
+function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
+
+// ── DELETE ─────────────────────────────────────────────────────
+async function delCard(id, e) {
+  e.stopPropagation();
+  if (!confirm('¿Eliminar esta ficha? Esta acción no se puede deshacer.')) return;
+  const { error } = await db.from('sistemas').delete().eq('id', id);
+  if (error) { toast('Error al eliminar','err'); return; }
+  cards = cards.filter(c=>c.id!==id);
+  expandedId=null; render(); toast('Ficha eliminada');
+}
+
+// ── MODAL ──────────────────────────────────────────────────────
+function openModal() {
+  editingId = null;
+  editorSubsys = [{ nombre: 'Principal', secciones: [] }];
+  activeSubsysIdx = 0;
+  secCounter = 0;
+  document.getElementById('fNombre').value='';
+  document.getElementById('fEfecto').value='';
+  document.getElementById('fFormula').value='';
+  document.getElementById('fCategoria').value='cinco-y-medio';
+  document.getElementById('modalTitle').textContent='Nueva ficha de sistema';
+  // Add default section to first subsystem
+  editorSubsys[0].secciones.push(makeNewSec());
+  renderModalSubsys();
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function openEdit(id, e) {
+  e&&e.stopPropagation();
+  const card = cards.find(c=>c.id===id); if(!card) return;
+  editingId = id; secCounter = 0;
+  editorSubsys = (card.subsistemas||[]).map(sub => ({
+    nombre: sub.nombre,
+    secciones: (sub.secciones||[]).map(sec => ({
+      _id: secCounter++,
+      titulo: sec.titulo||'',
+      fuente: sec.fuente||'',
+      tabla_text: (sec.tabla||[]).map(r=>`${r.pos}|${r.grosor}|${r.efecto}|${r.ajuste}`).join('\n'),
+      puntos_text: (sec.puntos||[]).join('\n'),
+      imgData: null,
+      existingUrl: sec.imagen||null
+    }))
+  }));
+  if (!editorSubsys.length) editorSubsys = [{ nombre:'Principal', secciones:[makeNewSec()] }];
+  activeSubsysIdx = 0;
+  document.getElementById('fNombre').value=card.nombre;
+  document.getElementById('fEfecto').value=card.efecto||'';
+  document.getElementById('fFormula').value=card.formula||'';
+  document.getElementById('fCategoria').value=card.categoria;
+  document.getElementById('modalTitle').textContent='Editar ficha';
+  renderModalSubsys();
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function makeNewSec() {
+  return { _id: secCounter++, titulo:'', fuente:'', tabla_text:'', puntos_text:'', imgData:null, existingUrl:null };
+}
+
+function renderModalSubsys() {
+  const tabsEl = document.getElementById('modalSubsysTabs');
+  const contentEl = document.getElementById('modalSubsysContent');
+
+  tabsEl.innerHTML = editorSubsys.map((s,i)=>`
+    <button class="modal-subsys-tab ${i===activeSubsysIdx?'active':''}" onclick="switchModalSubsys(${i})">${s.nombre}</button>
+  `).join('') + `<button class="modal-subsys-add" onclick="addSubsys()">＋ Subsistema</button>`;
+
+  const sub = editorSubsys[activeSubsysIdx];
+  contentEl.innerHTML = `
+    <div class="field" style="margin-bottom:14px">
+      <label>Nombre del subsistema</label>
+      <input type="text" id="subsys-nombre-${activeSubsysIdx}" value="${sub.nombre}" oninput="editorSubsys[activeSubsysIdx].nombre=this.value;document.querySelectorAll('.modal-subsys-tab')[activeSubsysIdx].textContent=this.value||'Sin nombre'">
+    </div>
+    <div class="sec-label">Secciones de este subsistema</div>
+    <div id="secEditorContainer"></div>
+    <button class="add-sec-btn" onclick="addSecToActive()">＋ Agregar sección</button>
+  `;
+  renderSecEditors();
+}
+
+function switchModalSubsys(idx) {
+  syncCurrentSubsysFromDOM();
+  activeSubsysIdx = idx;
+  renderModalSubsys();
+}
+
+function addSubsys() {
+  syncCurrentSubsysFromDOM();
+  editorSubsys.push({ nombre:`Subsistema ${editorSubsys.length+1}`, secciones:[makeNewSec()] });
+  activeSubsysIdx = editorSubsys.length - 1;
+  renderModalSubsys();
+}
+
+function addSecToActive() {
+  syncCurrentSubsysFromDOM();
+  editorSubsys[activeSubsysIdx].secciones.push(makeNewSec());
+  renderModalSubsys();
+}
+
+function renderSecEditors() {
+  const container = document.getElementById('secEditorContainer');
+  const secs = editorSubsys[activeSubsysIdx]?.secciones || [];
+  container.innerHTML = secs.map((sec, i) => {
+    const imgBlock = sec.existingUrl
+      ? `<img src="${sec.existingUrl}" class="sec-img-prev">`
+      : `<img id="sip-${sec._id}" class="sec-img-prev" style="display:none">`;
+    return `
+    <div class="sec-editor" id="se-${sec._id}">
+      <div class="sec-editor-hd">
+        <span class="sec-editor-name">Sección ${i+1}</span>
+        <button class="sec-remove" onclick="removeSec(${activeSubsysIdx},${i})">×</button>
+      </div>
+      <div class="field"><label>Título</label><input type="text" id="st-${sec._id}" value="${sec.titulo}" placeholder="Ej: Posición estándar"></div>
+      <div class="field"><label>🎬 Fuente / Link del video</label>
+        <input type="url" id="sf-${sec._id}" value="${sec.fuente}" placeholder="https://youtube.com/watch?v=...">
+      </div>
+      <div class="field"><label>Imagen (screenshot)</label>
+        <div class="upload-zone" onclick="document.getElementById('si-${sec._id}').click()">📷 Toca para subir imagen<input type="file" id="si-${sec._id}" accept="image/*" style="display:none" onchange="prevImg(event,${sec._id},${activeSubsysIdx},${i})"></div>
+        ${imgBlock}
+      </div>
+      <div class="field"><label>Tabla (Posición | Grosor | Efecto | Ajuste)</label>
+        <textarea id="stb-${sec._id}" placeholder="Estándar|2/8 toque|Efecto 1|—&#10;Bola2 +5|2/8 toque|Efecto 1|−50%">${sec.tabla_text}</textarea>
+        <div class="hint">Una fila por línea, columnas separadas por |</div>
+      </div>
+      <div class="field"><label>Puntos clave (uno por línea)</label>
+        <textarea id="sp-${sec._id}" placeholder="Grosor base 2/8&#10;Efecto 1 abre máximo 5 puntos">${sec.puntos_text}</textarea>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function removeSec(subIdx, secIdx) {
+  syncCurrentSubsysFromDOM();
+  editorSubsys[subIdx].secciones.splice(secIdx, 1);
+  if (!editorSubsys[subIdx].secciones.length) editorSubsys[subIdx].secciones.push(makeNewSec());
+  renderModalSubsys();
+}
+
+function prevImg(e, secId, subIdx, secIdx) {
+  const file = e.target.files[0]; if(!file) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    editorSubsys[subIdx].secciones[secIdx].imgData = file;
+    editorSubsys[subIdx].secciones[secIdx].existingUrl = null;
+    const p = document.getElementById('sip-'+secId);
+    if(p){ p.src=ev.target.result; p.style.display='block'; }
+  };
+  r.readAsDataURL(file);
+}
+
+function syncCurrentSubsysFromDOM() {
+  const sub = editorSubsys[activeSubsysIdx]; if(!sub) return;
+  sub.secciones.forEach(sec => {
+    sec.titulo = document.getElementById('st-'+sec._id)?.value || sec.titulo;
+    sec.fuente = document.getElementById('sf-'+sec._id)?.value || sec.fuente;
+    sec.tabla_text = document.getElementById('stb-'+sec._id)?.value || sec.tabla_text;
+    sec.puntos_text = document.getElementById('sp-'+sec._id)?.value || sec.puntos_text;
+  });
+  sub.nombre = document.getElementById('subsys-nombre-'+activeSubsysIdx)?.value || sub.nombre;
+}
+
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+function closeModalOutside(e) { if(e.target===document.getElementById('modalOverlay')) closeModal(); }
+
+// ── SAVE ───────────────────────────────────────────────────────
+async function saveCard() {
+  syncCurrentSubsysFromDOM();
+  const nombre = document.getElementById('fNombre').value.trim();
+  if (!nombre) { alert('Escribe el nombre del sistema.'); return; }
+
+  const btn = document.getElementById('btnSave');
+  btn.disabled=true; btn.innerHTML='<div class="spin" style="width:14px;height:14px;border-width:2px"></div> Guardando…';
+
+  try {
+    let sistemaId = editingId;
+
+    if (editingId) {
+      await db.from('sistemas').update({
+        nombre,
+        categoria: document.getElementById('fCategoria').value,
+        efecto: document.getElementById('fEfecto').value||'—',
+        formula: document.getElementById('fFormula').value||'—'
+      }).eq('id', editingId);
+      await db.from('secciones').delete().eq('sistema_id', editingId);
+    } else {
+      const { data, error } = await db.from('sistemas').insert({
+        nombre,
+        categoria: document.getElementById('fCategoria').value,
+        efecto: document.getElementById('fEfecto').value||'—',
+        formula: document.getElementById('fFormula').value||'—'
+      }).select().single();
+      if (error) throw error;
+      sistemaId = data.id;
+    }
+
+    let orden = 0;
+    for (const sub of editorSubsys) {
+      for (const sec of sub.secciones) {
+        const tabRaw = sec.tabla_text||'';
+        const tabla = tabRaw ? tabRaw.split('\n').filter(Boolean).map((l,o)=>{
+          const p=l.split('|').map(s=>s.trim());
+          return{pos:p[0]||'',grosor:p[1]||'',efecto:p[2]||'',ajuste:p[3]||'',orden:o};
+        }) : [];
+        const puntos = sec.puntos_text ? sec.puntos_text.split('\n').filter(Boolean) : [];
+
+        const { data: secData, error: secErr } = await db.from('secciones').insert({
+          sistema_id: sistemaId,
+          titulo: sec.titulo||'Sección',
+          puntos,
+          fuente: sec.fuente||null,
+          subsistema: sub.nombre,
+          orden: orden++
+        }).select().single();
+        if (secErr) throw secErr;
+
+        if (tabla.length) {
+          await db.from('tabla_filas').insert(tabla.map(r=>({...r, seccion_id:secData.id})));
+        }
+
+        if (sec.imgData) {
+          const ext = sec.imgData.name.split('.').pop();
+          const path = `${sistemaId}/${secData.id}-${Date.now()}.${ext}`;
+          const { error: upErr } = await db.storage.from(BUCKET).upload(path, sec.imgData, {upsert:true});
+          if (!upErr) {
+            const { data: urlData } = db.storage.from(BUCKET).getPublicUrl(path);
+            await db.from('imagenes').insert({seccion_id:secData.id, url:urlData.publicUrl, orden:0});
+          }
+        } else if (sec.existingUrl) {
+          await db.from('imagenes').insert({seccion_id:secData.id, url:sec.existingUrl, orden:0});
+        }
+      }
+    }
+
+    toast(editingId ? 'Ficha actualizada ✓' : 'Ficha guardada ✓');
+    expandedId = sistemaId; subsysTabMap[sistemaId]=0;
+    closeModal();
+    await loadAll();
+  } catch(err) {
+    console.error(err);
+    toast('Error: '+(err.message||err),'err');
+  } finally {
+    btn.disabled=false; btn.innerHTML='Guardar ficha';
+  }
+}
+
+loadAll();
+</script>
+</body>
+</html>
