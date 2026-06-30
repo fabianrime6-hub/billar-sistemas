@@ -196,6 +196,17 @@ aside.collapsed .nav-manage{opacity:0;pointer-events:none;}
 .cat-icon-btn:hover{background:var(--accent-dim);color:var(--accent);}
 .cat-icon-btn.danger:hover{background:rgba(255,79,106,.12);color:var(--red);}
 .cat-count-badge{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);flex-shrink:0;}
+
+/* SUBCATEGORIES */
+.nav-sub{padding:6px 8px 6px 28px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--muted);transition:all .12s;display:flex;justify-content:space-between;}
+.nav-sub:hover{background:var(--accent-dim);color:var(--text);}
+.nav-sub.active{background:var(--accent-dim);color:var(--accent);}
+.subcat-block{margin:6px 0 4px 8px;padding-left:10px;border-left:1px dashed var(--border);}
+.subcat-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.subcat-row input.cat-name-input{padding:5px 8px;font-size:12px;}
+.subcat-row .cat-icon-btn{font-size:12px;padding:3px;}
+.subcat-add-row{display:flex;gap:6px;margin-top:4px;}
+.subcat-add-row input{flex:1;padding:5px 8px;font-size:12px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);}
 </style>
 </head>
 <body>
@@ -226,14 +237,9 @@ aside.collapsed .nav-manage{opacity:0;pointer-events:none;}
     <div class="section-header">
       <div class="section-title" id="sectionTitle">Todos los sistemas</div>
       <div class="section-count" id="sectionCount"></div>
+      <button class="nav-manage" style="border-top:none;margin:0;padding:6px 10px" onclick="openEfManager()">⚙ Gestionar efectos</button>
     </div>
-    <div class="filters">
-      <button class="chip active" onclick="filterEf('all',this)">Todo</button>
-      <button class="chip" onclick="filterEf('efecto 1',this)">Efecto 1</button>
-      <button class="chip" onclick="filterEf('efecto 2',this)">Efecto 2</button>
-      <button class="chip" onclick="filterEf('jale',this)">Jale</button>
-      <button class="chip" onclick="filterEf('natural',this)">Natural</button>
-    </div>
+    <div class="filters" id="efChips"></div>
     <div class="grid" id="cardGrid">
       <div class="loader"><div class="spin"></div> Cargando fichas…</div>
     </div>
@@ -248,23 +254,27 @@ aside.collapsed .nav-manage{opacity:0;pointer-events:none;}
 <div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
   <div class="modal">
     <h2 id="modalTitle">Nueva ficha de sistema</h2>
-    <div class="modal-sub">Un sistema puede tener subsistemas, y cada subsistema tiene sus propias secciones/posiciones</div>
+    <div class="modal-sub">Cada ficha tiene secciones/posiciones; puedes asignarla a una categoría y subcategoría</div>
 
     <div class="field"><label>Nombre del sistema</label><input type="text" id="fNombre" placeholder="Ej: 5 corta efecto 1"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
       <div class="field"><label>Categoría</label>
-        <select id="fCategoria"></select>
+        <select id="fCategoria" onchange="onCategoriaChange()"></select>
       </div>
-      <div class="field"><label>Efecto principal</label><input type="text" id="fEfecto" placeholder="Efecto 1 / Jale…"></div>
+      <div class="field"><label>Subcategoría</label>
+        <select id="fSubcategoria"><option value="">— Ninguna —</option></select>
+      </div>
+      <div class="field"><label>Efecto principal</label>
+        <select id="fEfecto"><option value="">— Ninguno —</option></select>
+      </div>
     </div>
     <div class="field"><label>Fórmula general</label><input type="text" id="fFormula" placeholder="Ej: 1 tip = 5 puntos de apertura"></div>
 
     <hr class="divider">
 
-    <!-- SUBSYSTEM TABS IN MODAL -->
-    <div class="sec-label">Subsistemas</div>
-    <div class="modal-subsys-tabs" id="modalSubsysTabs"></div>
-    <div id="modalSubsysContent"></div>
+    <div class="sec-label">Secciones</div>
+    <div id="secEditorContainer"></div>
+    <button class="add-sec-btn" onclick="addSecToActive()">＋ Agregar sección</button>
 
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
@@ -275,8 +285,7 @@ aside.collapsed .nav-manage{opacity:0;pointer-events:none;}
 
 <!-- MODAL GESTIÓN DE CATEGORÍAS -->
 <div class="modal-overlay" id="catModalOverlay" onclick="closeCatModalOutside(event)">
-  <div class="modal" style="max-width:480px">
-    <h2>Gestionar categorías</h2>
+  <div class="modal" style="max-width:560px">
     <div class="modal-sub">Edita el ícono o nombre, elimina las que no uses, o agrega nuevas.</div>
     <div id="catList" style="margin-bottom:16px"></div>
     <hr class="divider">
@@ -292,6 +301,22 @@ aside.collapsed .nav-manage{opacity:0;pointer-events:none;}
   </div>
 </div>
 
+<!-- MODAL GESTIÓN DE EFECTOS -->
+<div class="modal-overlay" id="efModalOverlay" onclick="closeEfModalOutside(event)">
+  <div class="modal" style="max-width:480px">
+    <h2>Gestionar efectos</h2>
+    <div class="modal-sub">Estos son los chips de filtro de arriba; edítalos o agrega nuevos.</div>
+    <div id="efList" style="margin-bottom:16px"></div>
+    <hr class="divider">
+    <div class="sec-label">Nuevo efecto</div>
+    <input type="text" id="newEfNombre" placeholder="Nombre del efecto" style="margin-bottom:12px">
+    <button class="btn-sm" style="width:100%;justify-content:center" onclick="addEfecto()">＋ Agregar efecto</button>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeEfManager()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -302,14 +327,13 @@ const db = createClient(SUPA_URL, SUPA_KEY);
 const BUCKET = 'imagenes';
 
 // ── STATE ──────────────────────────────────────────────────────
-let cards = [], categorias = [], expandedId = null, subsysTabMap = {}, secTabMap = {};
-let curCat = 'all', curEf = 'all', searchQ = '';
+let cards = [], categorias = [], subcategorias = [], efectos = [], expandedId = null, secTabMap = {};
+let curCat = 'all', curSub = 'all', curEf = 'all', searchQ = '';
 let editingId = null;
 
 // Modal editor state: array of subsystems, each has { nombre, secciones[] }
 // secciones[]: { titulo, fuente, tabla_text, puntos_text, imgData, existingUrl }
-let editorSubsys = [];
-let activeSubsysIdx = 0;
+let editorSecs = [];
 let secCounter = 0;
 
 // ── SIDEBAR COLLAPSE ───────────────────────────────────────────
@@ -332,15 +356,19 @@ function toast(msg, type='ok') {
 
 // ── LOAD ───────────────────────────────────────────────────────
 async function loadAll() {
-  const { data: cats, error: catErr } = await db.from('categorias').select('*').order('orden', { ascending: true });
-  if (catErr) { toast('Error cargando categorías','err'); }
-  categorias = cats || [];
-  renderSidebar(); renderCatSelect();
+  const [{ data: cats, error: catErr }, { data: subcats, error: subErr }, { data: efs, error: efErr }] = await Promise.all([
+    db.from('categorias').select('*').order('orden', { ascending: true }),
+    db.from('subcategorias').select('*').order('orden', { ascending: true }),
+    db.from('efectos').select('*').order('orden', { ascending: true })
+  ]);
+  if (catErr || subErr || efErr) toast('Error cargando categorías/efectos','err');
+  categorias = cats || []; subcategorias = subcats || []; efectos = efs || [];
+  renderSidebar(); renderCatSelect(); renderEfChips(); renderEfSelect();
 
   const { data: sistemas, error } = await db.from('sistemas').select(`
-    id, nombre, categoria, efecto, formula, created_at,
+    id, nombre, categoria, subcategoria_id, efecto, formula, created_at,
     secciones (
-      id, titulo, puntos, orden, fuente, subsistema,
+      id, titulo, puntos, orden, fuente,
       tabla_filas (id, pos, grosor, efecto, ajuste, orden),
       imagenes (id, url, orden)
     )
@@ -348,24 +376,14 @@ async function loadAll() {
 
   if (error) { toast('Error cargando datos', 'err'); return; }
 
-  cards = (sistemas || []).map(s => {
-    const allSecs = (s.secciones || []).sort((a,b) => a.orden - b.orden).map(sec => ({
+  cards = (sistemas || []).map(s => ({
+    ...s,
+    secciones: (s.secciones || []).sort((a,b) => a.orden - b.orden).map(sec => ({
       ...sec,
       tabla: (sec.tabla_filas || []).sort((a,b)=>a.orden-b.orden),
       imagen: (sec.imagenes || []).sort((a,b)=>a.orden-b.orden)[0]?.url || null
-    }));
-
-    // Group by subsistema
-    const subsMap = {};
-    allSecs.forEach(sec => {
-      const key = sec.subsistema || 'Principal';
-      if (!subsMap[key]) subsMap[key] = [];
-      subsMap[key].push(sec);
-    });
-    const subsistemas = Object.entries(subsMap).map(([nombre, secciones]) => ({ nombre, secciones }));
-
-    return { ...s, subsistemas };
-  });
+    }))
+  }));
   render();
 }
 
@@ -373,28 +391,30 @@ async function loadAll() {
 function getFiltered() {
   return cards.filter(c => {
     const mc = curCat === 'all' || c.categoria === curCat;
-    const me = curEf === 'all' || (c.efecto||'').toLowerCase().includes(curEf);
+    const ms = curSub === 'all' || c.subcategoria_id === curSub;
+    const me = curEf === 'all' || c.efecto === curEf;
     const q = searchQ.toLowerCase();
     const mq = !q || c.nombre.toLowerCase().includes(q)
       || (c.efecto||'').toLowerCase().includes(q)
       || (c.formula||'').toLowerCase().includes(q)
-      || (c.subsistemas||[]).some(sub =>
-          sub.nombre.toLowerCase().includes(q) ||
-          (sub.secciones||[]).some(s =>
-            (s.titulo||'').toLowerCase().includes(q) ||
-            (s.puntos||[]).some(p=>p.toLowerCase().includes(q))
-          )
+      || (c.secciones||[]).some(s =>
+          (s.titulo||'').toLowerCase().includes(q) ||
+          (s.puntos||[]).some(p=>p.toLowerCase().includes(q))
         );
-    return mc && me && mq;
+    return mc && ms && me && mq;
   });
 }
 
 function filterCat(cat, el) {
-  curCat = cat; expandedId = null;
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  el.classList.add('active');
+  curCat = cat; curSub = 'all'; expandedId = null;
   const found = categorias.find(c => c.slug === cat);
   document.getElementById('sectionTitle').textContent = cat === 'all' ? 'Todos los sistemas' : (found ? found.nombre : cat);
+  renderSidebar();
+  render();
+}
+function filterSub(subId, el) {
+  curSub = subId; expandedId = null;
+  renderSidebar();
   render();
 }
 function filterEf(ef, el) {
@@ -411,20 +431,52 @@ function updCounts() {
     const el = document.getElementById('cCat'+cat.id);
     if (el) el.textContent = cards.filter(c => c.categoria === cat.slug).length;
   });
+  subcategorias.forEach(sc => {
+    const el = document.getElementById('cSub'+sc.id);
+    if (el) el.textContent = cards.filter(c => c.subcategoria_id === sc.id).length;
+  });
 }
 
-// ── SIDEBAR / SELECT (dinámico desde tabla categorias) ────────
+// ── SIDEBAR / SELECT (dinámico desde tablas categorias/subcategorias/efectos) ──
 function renderSidebar() {
   const wrap = document.getElementById('navCats');
-  wrap.innerHTML = categorias.map(cat => `
-    <div class="nav-item" onclick="filterCat('${cat.slug}',this)">
+  document.querySelectorAll('#sidebar .nav-item').forEach(n=>n.classList.remove('active'));
+  wrap.innerHTML = categorias.map(cat => {
+    const isActiveCat = curCat === cat.slug;
+    const subsOfCat = subcategorias.filter(sc => sc.categoria_id === cat.id);
+    const subsHtml = (isActiveCat && subsOfCat.length) ? `
+      <div class="subcat-block">
+        <div class="nav-sub ${curSub==='all'?'active':''}" onclick="filterSub('all',this)">Todas <span class="count">${cards.filter(c=>c.categoria===cat.slug).length}</span></div>
+        ${subsOfCat.map(sc=>`<div class="nav-sub ${curSub===sc.id?'active':''}" onclick="filterSub(${sc.id},this)">${sc.nombre} <span class="count" id="cSub${sc.id}">—</span></div>`).join('')}
+      </div>` : '';
+    return `<div class="nav-item ${isActiveCat?'active':''}" onclick="filterCat('${cat.slug}',this)">
       <span class="nav-icon">${cat.icono||'📌'}</span><span class="nav-text">${cat.nombre}</span><span class="count" id="cCat${cat.id}">—</span>
-    </div>`).join('');
+    </div>${subsHtml}`;
+  }).join('');
+  if (curCat==='all') document.querySelector('#sidebar .nav-item').classList.add('active');
   updCounts();
 }
 function renderCatSelect() {
   const sel = document.getElementById('fCategoria');
   sel.innerHTML = categorias.map(cat => `<option value="${cat.slug}">${cat.nombre}</option>`).join('');
+}
+function renderSubcatSelect(categoriaSlug, selectedId) {
+  const sel = document.getElementById('fSubcategoria');
+  const cat = categorias.find(c=>c.slug===categoriaSlug);
+  const subs = cat ? subcategorias.filter(sc=>sc.categoria_id===cat.id) : [];
+  sel.innerHTML = '<option value="">— Ninguna —</option>' + subs.map(sc=>`<option value="${sc.id}">${sc.nombre}</option>`).join('');
+  if (selectedId) sel.value = selectedId;
+}
+function onCategoriaChange() { renderSubcatSelect(document.getElementById('fCategoria').value, null); }
+function renderEfChips() {
+  const wrap = document.getElementById('efChips');
+  wrap.innerHTML = `<button class="chip ${curEf==='all'?'active':''}" onclick="filterEf('all',this)">Todo</button>` +
+    efectos.map(ef => `<button class="chip ${curEf===ef.slug?'active':''}" onclick="filterEf('${ef.slug}',this)">${ef.nombre}</button>`).join('');
+}
+function renderEfSelect(selected) {
+  const sel = document.getElementById('fEfecto');
+  sel.innerHTML = '<option value="">— Ninguno —</option>' + efectos.map(ef=>`<option value="${ef.slug}">${ef.nombre}</option>`).join('');
+  if (selected) sel.value = selected;
 }
 
 function render() {
@@ -438,23 +490,16 @@ function render() {
     const isOpen = expandedId === c.id;
     const catObj = categorias.find(cat => cat.slug === c.categoria);
     const catL = catObj ? catObj.nombre : (c.categoria || '—');
-    const subs = c.subsistemas || [];
-    const totalSecs = subs.reduce((a,s)=>a+s.secciones.length,0);
-    const activeSub = subsysTabMap[c.id] || 0;
-    const activeSubData = subs[activeSub] || subs[0] || { nombre:'—', secciones:[] };
-    const activeSecIdx = secTabMap[`${c.id}-${activeSub}`] || 0;
-    const sec = activeSubData.secciones[activeSecIdx] || {};
-    const thumb = subs.flatMap(s=>s.secciones).find(s=>s.imagen)?.imagen || null;
-
-    // Subsystem bar
-    const subsBar = subs.length > 1 ? `
-      <div class="subsys-bar">
-        ${subs.map((s,i)=>`<div class="subsys-tab ${i===activeSub?'active':''}" onclick="setSubsys(${c.id},${i},event)">${s.nombre}</div>`).join('')}
-      </div>` : '';
+    const subObj = subcategorias.find(sc => sc.id === c.subcategoria_id);
+    const efObj = efectos.find(ef => ef.slug === c.efecto);
+    const secs = c.secciones || [];
+    const activeSecIdx = secTabMap[c.id] || 0;
+    const sec = secs[activeSecIdx] || {};
+    const thumb = secs.find(s=>s.imagen)?.imagen || null;
 
     // Section tabs
-    const tabsHtml = activeSubData.secciones.map((s,i)=>
-      `<div class="tab ${i===activeSecIdx?'active':''}" onclick="setSec(${c.id},${activeSub},${i},event)">${s.titulo||'Sección '+(i+1)}</div>`
+    const tabsHtml = secs.map((s,i)=>
+      `<div class="tab ${i===activeSecIdx?'active':''}" onclick="setSec(${c.id},${i},event)">${s.titulo||'Sección '+(i+1)}</div>`
     ).join('') + (isOpen ? `<div class="tab-edit" onclick="openEdit(${c.id},event)">✏️ Editar</div>` : '');
 
     // Fuente link
@@ -474,16 +519,14 @@ function render() {
       ${thumb?`<img class="card-thumb" src="${thumb}" onclick="toggle(${c.id})" loading="lazy">`:`<div class="card-thumb-placeholder" onclick="toggle(${c.id})">🎱</div>`}
       <div class="card-body" onclick="toggle(${c.id})">
         <div class="card-tags">
-          <span class="tag">${catL}</span>
-          <span class="tag green">${c.efecto||'—'}</span>
-          ${subs.length>1?`<span class="tag" style="background:rgba(79,142,255,.12);color:#4f8eff">${subs.length} subsistemas</span>`:''}
-          <span class="tag gray">${totalSecs} sección${totalSecs!==1?'es':''}</span>
+          <span class="tag">${catL}${subObj?' / '+subObj.nombre:''}</span>
+          <span class="tag green">${efObj?efObj.nombre:'—'}</span>
+          <span class="tag gray">${secs.length} sección${secs.length!==1?'es':''}</span>
         </div>
         <div class="card-title">${c.nombre}</div>
         <div class="card-meta">${c.formula||'—'}</div>
       </div>
       <div class="detail ${isOpen?'open':''}">
-        ${subsBar}
         <div class="tabs">${tabsHtml}</div>
         <div class="sec-content">
           ${fuenteHtml}
@@ -509,12 +552,10 @@ function render() {
 
 function toggle(id) {
   expandedId = expandedId===id ? null : id;
-  if (expandedId && !subsysTabMap[expandedId]) subsysTabMap[expandedId]=0;
   render();
   if (expandedId) setTimeout(()=>document.getElementById('card-'+id)?.scrollIntoView({behavior:'smooth',block:'nearest'}),60);
 }
-function setSubsys(cardId, idx, e) { e.stopPropagation(); subsysTabMap[cardId]=idx; render(); }
-function setSec(cardId, subIdx, secIdx, e) { e.stopPropagation(); secTabMap[`${cardId}-${subIdx}`]=secIdx; render(); }
+function setSec(cardId, secIdx, e) { e.stopPropagation(); secTabMap[cardId]=secIdx; render(); }
 function openLB(src,e) { e&&e.stopPropagation(); document.getElementById('lbImg').src=src; document.getElementById('lightbox').classList.add('open'); }
 function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
 
@@ -546,13 +587,31 @@ function renderCatList() {
   if (!categorias.length) { wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;font-style:italic">Aún no hay categorías. Agrega la primera abajo.</div>'; return; }
   wrap.innerHTML = categorias.map(cat => {
     const n = cards.filter(c=>c.categoria===cat.slug).length;
-    return `<div class="cat-row">
-      <input type="text" class="cat-icon-input" id="catIco${cat.id}" value="${cat.icono||''}" maxlength="3">
-      <input type="text" class="cat-name-input" id="catNom${cat.id}" value="${cat.nombre}">
-      <span class="cat-count-badge">${n} ficha${n!==1?'s':''}</span>
-      <div class="cat-row-actions">
-        <button class="cat-icon-btn" title="Guardar" onclick="saveCategoria(${cat.id})">💾</button>
-        <button class="cat-icon-btn danger" title="Eliminar" onclick="deleteCategoria(${cat.id})">🗑</button>
+    const subs = subcategorias.filter(sc=>sc.categoria_id===cat.id);
+    return `<div class="cat-row" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="text" class="cat-icon-input" id="catIco${cat.id}" value="${cat.icono||''}" maxlength="3">
+        <input type="text" class="cat-name-input" id="catNom${cat.id}" value="${cat.nombre}">
+        <span class="cat-count-badge">${n} ficha${n!==1?'s':''}</span>
+        <div class="cat-row-actions">
+          <button class="cat-icon-btn" title="Guardar" onclick="saveCategoria(${cat.id})">💾</button>
+          <button class="cat-icon-btn danger" title="Eliminar" onclick="deleteCategoria(${cat.id})">🗑</button>
+        </div>
+      </div>
+      <div class="subcat-block">
+        ${subs.map(sc => {
+          const sn = cards.filter(c=>c.subcategoria_id===sc.id).length;
+          return `<div class="subcat-row">
+            <input type="text" class="cat-name-input" id="subNom${sc.id}" value="${sc.nombre}">
+            <span class="cat-count-badge">${sn}</span>
+            <button class="cat-icon-btn" title="Guardar" onclick="saveSubcategoria(${sc.id})">💾</button>
+            <button class="cat-icon-btn danger" title="Eliminar" onclick="deleteSubcategoria(${sc.id})">🗑</button>
+          </div>`;
+        }).join('')}
+        <div class="subcat-add-row">
+          <input type="text" id="newSubNombre${cat.id}" placeholder="Nueva subcategoría (ej: V1)">
+          <button class="cat-icon-btn" title="Agregar" onclick="addSubcategoria(${cat.id})">＋</button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -601,20 +660,125 @@ async function deleteCategoria(id) {
   toast('Categoría eliminada');
 }
 
+// ── SUBCATEGORÍAS (anidadas bajo una categoría) ───────────────
+async function addSubcategoria(categoriaId) {
+  const input = document.getElementById('newSubNombre'+categoriaId);
+  const nombre = input.value.trim();
+  if (!nombre) { toast('Escribe un nombre','err'); return; }
+  const slug = slugify(nombre);
+  const hermanas = subcategorias.filter(sc=>sc.categoria_id===categoriaId);
+  if (hermanas.some(sc=>sc.slug===slug)) { toast('Ya existe esa subcategoría','err'); return; }
+  const orden = hermanas.length ? Math.max(...hermanas.map(sc=>sc.orden||0))+1 : 1;
+  const { data, error } = await db.from('subcategorias').insert({ categoria_id: categoriaId, slug, nombre, orden }).select().single();
+  if (error) { toast('Error al agregar subcategoría','err'); return; }
+  subcategorias.push(data);
+  input.value = '';
+  renderCatList(); renderSidebar();
+  toast('Subcategoría agregada');
+}
+
+async function saveSubcategoria(id) {
+  const nombre = document.getElementById('subNom'+id).value.trim();
+  if (!nombre) { toast('El nombre no puede estar vacío','err'); return; }
+  const { error } = await db.from('subcategorias').update({ nombre }).eq('id', id);
+  if (error) { toast('Error al guardar','err'); return; }
+  const sc = subcategorias.find(s=>s.id===id);
+  sc.nombre = nombre;
+  renderCatList(); renderSidebar(); render();
+  toast('Subcategoría actualizada');
+}
+
+async function deleteSubcategoria(id) {
+  const sc = subcategorias.find(s=>s.id===id);
+  if (!sc) return;
+  const n = cards.filter(c=>c.subcategoria_id===id).length;
+  const msg = n > 0
+    ? `Hay ${n} ficha${n!==1?'s':''} usando "${sc.nombre}". Si la eliminas, esas fichas se quedan sin subcategoría (pero conservan su categoría principal). ¿Eliminar de todos modos?`
+    : `¿Eliminar la subcategoría "${sc.nombre}"?`;
+  if (!confirm(msg)) return;
+  const { error } = await db.from('subcategorias').delete().eq('id', id);
+  if (error) { toast('Error al eliminar subcategoría','err'); return; }
+  subcategorias = subcategorias.filter(s=>s.id!==id);
+  if (curSub === id) curSub = 'all';
+  renderCatList(); renderSidebar(); render();
+  toast('Subcategoría eliminada');
+}
+
+// ── GESTIÓN DE EFECTOS ─────────────────────────────────────────
+function openEfManager() { renderEfList(); document.getElementById('efModalOverlay').classList.add('open'); }
+function closeEfManager() { document.getElementById('efModalOverlay').classList.remove('open'); }
+function closeEfModalOutside(e) { if (e.target.id === 'efModalOverlay') closeEfManager(); }
+
+function renderEfList() {
+  const wrap = document.getElementById('efList');
+  if (!efectos.length) { wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;font-style:italic">Aún no hay efectos. Agrega el primero abajo.</div>'; return; }
+  wrap.innerHTML = efectos.map(ef => {
+    const n = cards.filter(c=>c.efecto===ef.slug).length;
+    return `<div class="cat-row">
+      <input type="text" class="cat-name-input" id="efNom${ef.id}" value="${ef.nombre}">
+      <span class="cat-count-badge">${n} ficha${n!==1?'s':''}</span>
+      <div class="cat-row-actions">
+        <button class="cat-icon-btn" title="Guardar" onclick="saveEfecto(${ef.id})">💾</button>
+        <button class="cat-icon-btn danger" title="Eliminar" onclick="deleteEfecto(${ef.id})">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addEfecto() {
+  const nombre = document.getElementById('newEfNombre').value.trim();
+  if (!nombre) { toast('Escribe un nombre','err'); return; }
+  const slug = slugify(nombre);
+  if (efectos.some(e=>e.slug===slug)) { toast('Ya existe ese efecto','err'); return; }
+  const orden = efectos.length ? Math.max(...efectos.map(e=>e.orden||0))+1 : 1;
+  const { data, error } = await db.from('efectos').insert({ slug, nombre, orden }).select().single();
+  if (error) { toast('Error al agregar efecto','err'); return; }
+  efectos.push(data);
+  document.getElementById('newEfNombre').value='';
+  renderEfChips(); renderEfSelect(); renderEfList();
+  toast('Efecto agregado');
+}
+
+async function saveEfecto(id) {
+  const nombre = document.getElementById('efNom'+id).value.trim();
+  if (!nombre) { toast('El nombre no puede estar vacío','err'); return; }
+  const { error } = await db.from('efectos').update({ nombre }).eq('id', id);
+  if (error) { toast('Error al guardar','err'); return; }
+  const ef = efectos.find(e=>e.id===id);
+  ef.nombre = nombre;
+  renderEfChips(); renderEfSelect(); render();
+  toast('Efecto actualizado');
+}
+
+async function deleteEfecto(id) {
+  const ef = efectos.find(e=>e.id===id);
+  if (!ef) return;
+  const n = cards.filter(c=>c.efecto===ef.slug).length;
+  const msg = n > 0
+    ? `Hay ${n} ficha${n!==1?'s':''} usando "${ef.nombre}". Si lo eliminas, esas fichas se quedan sin efecto asignado. ¿Eliminar de todos modos?`
+    : `¿Eliminar el efecto "${ef.nombre}"?`;
+  if (!confirm(msg)) return;
+  const { error } = await db.from('efectos').delete().eq('id', id);
+  if (error) { toast('Error al eliminar efecto','err'); return; }
+  efectos = efectos.filter(e=>e.id!==id);
+  if (curEf === ef.slug) curEf = 'all';
+  renderEfChips(); renderEfSelect(); renderEfList(); render();
+  toast('Efecto eliminado');
+}
+
 // ── MODAL ──────────────────────────────────────────────────────
 function openModal() {
   editingId = null;
-  editorSubsys = [{ nombre: 'Principal', secciones: [] }];
-  activeSubsysIdx = 0;
+  editorSecs = [];
   secCounter = 0;
   document.getElementById('fNombre').value='';
-  document.getElementById('fEfecto').value='';
   document.getElementById('fFormula').value='';
-  document.getElementById('fCategoria').value='cinco-y-medio';
+  document.getElementById('fCategoria').value = categorias[0]?.slug || '';
+  renderSubcatSelect(document.getElementById('fCategoria').value, null);
+  renderEfSelect(null);
   document.getElementById('modalTitle').textContent='Nueva ficha de sistema';
-  // Add default section to first subsystem
-  editorSubsys[0].secciones.push(makeNewSec());
-  renderModalSubsys();
+  editorSecs.push(makeNewSec());
+  renderSecEditors();
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -622,26 +786,23 @@ function openEdit(id, e) {
   e&&e.stopPropagation();
   const card = cards.find(c=>c.id===id); if(!card) return;
   editingId = id; secCounter = 0;
-  editorSubsys = (card.subsistemas||[]).map(sub => ({
-    nombre: sub.nombre,
-    secciones: (sub.secciones||[]).map(sec => ({
-      _id: secCounter++,
-      titulo: sec.titulo||'',
-      fuente: sec.fuente||'',
-      tabla_text: (sec.tabla||[]).map(r=>`${r.pos}|${r.grosor}|${r.efecto}|${r.ajuste}`).join('\n'),
-      puntos_text: (sec.puntos||[]).join('\n'),
-      imgData: null,
-      existingUrl: sec.imagen||null
-    }))
+  editorSecs = (card.secciones||[]).map(sec => ({
+    _id: secCounter++,
+    titulo: sec.titulo||'',
+    fuente: sec.fuente||'',
+    tabla_text: (sec.tabla||[]).map(r=>`${r.pos}|${r.grosor}|${r.efecto}|${r.ajuste}`).join('\n'),
+    puntos_text: (sec.puntos||[]).join('\n'),
+    imgData: null,
+    existingUrl: sec.imagen||null
   }));
-  if (!editorSubsys.length) editorSubsys = [{ nombre:'Principal', secciones:[makeNewSec()] }];
-  activeSubsysIdx = 0;
+  if (!editorSecs.length) editorSecs = [makeNewSec()];
   document.getElementById('fNombre').value=card.nombre;
-  document.getElementById('fEfecto').value=card.efecto||'';
   document.getElementById('fFormula').value=card.formula||'';
   document.getElementById('fCategoria').value=card.categoria;
+  renderSubcatSelect(card.categoria, card.subcategoria_id);
+  renderEfSelect(card.efecto);
   document.getElementById('modalTitle').textContent='Editar ficha';
-  renderModalSubsys();
+  renderSecEditors();
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -649,50 +810,15 @@ function makeNewSec() {
   return { _id: secCounter++, titulo:'', fuente:'', tabla_text:'', puntos_text:'', imgData:null, existingUrl:null };
 }
 
-function renderModalSubsys() {
-  const tabsEl = document.getElementById('modalSubsysTabs');
-  const contentEl = document.getElementById('modalSubsysContent');
-
-  tabsEl.innerHTML = editorSubsys.map((s,i)=>`
-    <button class="modal-subsys-tab ${i===activeSubsysIdx?'active':''}" onclick="switchModalSubsys(${i})">${s.nombre}</button>
-  `).join('') + `<button class="modal-subsys-add" onclick="addSubsys()">＋ Subsistema</button>`;
-
-  const sub = editorSubsys[activeSubsysIdx];
-  contentEl.innerHTML = `
-    <div class="field" style="margin-bottom:14px">
-      <label>Nombre del subsistema</label>
-      <input type="text" id="subsys-nombre-${activeSubsysIdx}" value="${sub.nombre}" oninput="editorSubsys[activeSubsysIdx].nombre=this.value;document.querySelectorAll('.modal-subsys-tab')[activeSubsysIdx].textContent=this.value||'Sin nombre'">
-    </div>
-    <div class="sec-label">Secciones de este subsistema</div>
-    <div id="secEditorContainer"></div>
-    <button class="add-sec-btn" onclick="addSecToActive()">＋ Agregar sección</button>
-  `;
-  renderSecEditors();
-}
-
-function switchModalSubsys(idx) {
-  syncCurrentSubsysFromDOM();
-  activeSubsysIdx = idx;
-  renderModalSubsys();
-}
-
-function addSubsys() {
-  syncCurrentSubsysFromDOM();
-  editorSubsys.push({ nombre:`Subsistema ${editorSubsys.length+1}`, secciones:[makeNewSec()] });
-  activeSubsysIdx = editorSubsys.length - 1;
-  renderModalSubsys();
-}
-
 function addSecToActive() {
-  syncCurrentSubsysFromDOM();
-  editorSubsys[activeSubsysIdx].secciones.push(makeNewSec());
-  renderModalSubsys();
+  syncSecsFromDOM();
+  editorSecs.push(makeNewSec());
+  renderSecEditors();
 }
 
 function renderSecEditors() {
   const container = document.getElementById('secEditorContainer');
-  const secs = editorSubsys[activeSubsysIdx]?.secciones || [];
-  container.innerHTML = secs.map((sec, i) => {
+  container.innerHTML = editorSecs.map((sec, i) => {
     const imgBlock = sec.existingUrl
       ? `<img src="${sec.existingUrl}" class="sec-img-prev">`
       : `<img id="sip-${sec._id}" class="sec-img-prev" style="display:none">`;
@@ -700,14 +826,14 @@ function renderSecEditors() {
     <div class="sec-editor" id="se-${sec._id}">
       <div class="sec-editor-hd">
         <span class="sec-editor-name">Sección ${i+1}</span>
-        <button class="sec-remove" onclick="removeSec(${activeSubsysIdx},${i})">×</button>
+        <button class="sec-remove" onclick="removeSec(${i})">×</button>
       </div>
       <div class="field"><label>Título</label><input type="text" id="st-${sec._id}" value="${sec.titulo}" placeholder="Ej: Posición estándar"></div>
       <div class="field"><label>🎬 Fuente / Link del video</label>
         <input type="url" id="sf-${sec._id}" value="${sec.fuente}" placeholder="https://youtube.com/watch?v=...">
       </div>
       <div class="field"><label>Imagen (screenshot)</label>
-        <div class="upload-zone" onclick="document.getElementById('si-${sec._id}').click()">📷 Toca para subir imagen<input type="file" id="si-${sec._id}" accept="image/*" style="display:none" onchange="prevImg(event,${sec._id},${activeSubsysIdx},${i})"></div>
+        <div class="upload-zone" onclick="document.getElementById('si-${sec._id}').click()">📷 Toca para subir imagen<input type="file" id="si-${sec._id}" accept="image/*" style="display:none" onchange="prevImg(event,${sec._id},${i})"></div>
         ${imgBlock}
       </div>
       <div class="field"><label>Tabla (Posición | Grosor | Efecto | Ajuste)</label>
@@ -721,34 +847,32 @@ function renderSecEditors() {
   }).join('');
 }
 
-function removeSec(subIdx, secIdx) {
-  syncCurrentSubsysFromDOM();
-  editorSubsys[subIdx].secciones.splice(secIdx, 1);
-  if (!editorSubsys[subIdx].secciones.length) editorSubsys[subIdx].secciones.push(makeNewSec());
-  renderModalSubsys();
+function removeSec(secIdx) {
+  syncSecsFromDOM();
+  editorSecs.splice(secIdx, 1);
+  if (!editorSecs.length) editorSecs.push(makeNewSec());
+  renderSecEditors();
 }
 
-function prevImg(e, secId, subIdx, secIdx) {
+function prevImg(e, secId, secIdx) {
   const file = e.target.files[0]; if(!file) return;
   const r = new FileReader();
   r.onload = ev => {
-    editorSubsys[subIdx].secciones[secIdx].imgData = file;
-    editorSubsys[subIdx].secciones[secIdx].existingUrl = null;
+    editorSecs[secIdx].imgData = file;
+    editorSecs[secIdx].existingUrl = null;
     const p = document.getElementById('sip-'+secId);
     if(p){ p.src=ev.target.result; p.style.display='block'; }
   };
   r.readAsDataURL(file);
 }
 
-function syncCurrentSubsysFromDOM() {
-  const sub = editorSubsys[activeSubsysIdx]; if(!sub) return;
-  sub.secciones.forEach(sec => {
-    sec.titulo = document.getElementById('st-'+sec._id)?.value || sec.titulo;
-    sec.fuente = document.getElementById('sf-'+sec._id)?.value || sec.fuente;
-    sec.tabla_text = document.getElementById('stb-'+sec._id)?.value || sec.tabla_text;
-    sec.puntos_text = document.getElementById('sp-'+sec._id)?.value || sec.puntos_text;
+function syncSecsFromDOM() {
+  editorSecs.forEach(sec => {
+    sec.titulo = document.getElementById('st-'+sec._id)?.value ?? sec.titulo;
+    sec.fuente = document.getElementById('sf-'+sec._id)?.value ?? sec.fuente;
+    sec.tabla_text = document.getElementById('stb-'+sec._id)?.value ?? sec.tabla_text;
+    sec.puntos_text = document.getElementById('sp-'+sec._id)?.value ?? sec.puntos_text;
   });
-  sub.nombre = document.getElementById('subsys-nombre-'+activeSubsysIdx)?.value || sub.nombre;
 }
 
 function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
@@ -756,7 +880,7 @@ function closeModalOutside(e) { if(e.target===document.getElementById('modalOver
 
 // ── SAVE ───────────────────────────────────────────────────────
 async function saveCard() {
-  syncCurrentSubsysFromDOM();
+  syncSecsFromDOM();
   const nombre = document.getElementById('fNombre').value.trim();
   if (!nombre) { alert('Escribe el nombre del sistema.'); return; }
 
@@ -770,7 +894,8 @@ async function saveCard() {
       await db.from('sistemas').update({
         nombre,
         categoria: document.getElementById('fCategoria').value,
-        efecto: document.getElementById('fEfecto').value||'—',
+        subcategoria_id: document.getElementById('fSubcategoria').value || null,
+        efecto: document.getElementById('fEfecto').value || null,
         formula: document.getElementById('fFormula').value||'—'
       }).eq('id', editingId);
       await db.from('secciones').delete().eq('sistema_id', editingId);
@@ -778,56 +903,55 @@ async function saveCard() {
       const { data, error } = await db.from('sistemas').insert({
         nombre,
         categoria: document.getElementById('fCategoria').value,
-        efecto: document.getElementById('fEfecto').value||'—',
+        subcategoria_id: document.getElementById('fSubcategoria').value || null,
+        efecto: document.getElementById('fEfecto').value || null,
         formula: document.getElementById('fFormula').value||'—'
       }).select().single();
       if (error) throw error;
       sistemaId = data.id;
     }
 
+    syncSecsFromDOM();
     let orden = 0;
-    for (const sub of editorSubsys) {
-      for (const sec of sub.secciones) {
-        const tabRaw = sec.tabla_text||'';
-        const tabla = tabRaw ? tabRaw.split('\n').filter(Boolean).map((l,o)=>{
-          const p=l.split('|').map(s=>s.trim());
-          return{pos:p[0]||'',grosor:p[1]||'',efecto:p[2]||'',ajuste:p[3]||'',orden:o};
-        }) : [];
-        const puntos = sec.puntos_text ? sec.puntos_text.split('\n').filter(Boolean) : [];
+    for (const sec of editorSecs) {
+      const tabRaw = sec.tabla_text||'';
+      const tabla = tabRaw ? tabRaw.split('\n').filter(Boolean).map((l,o)=>{
+        const p=l.split('|').map(s=>s.trim());
+        return{pos:p[0]||'',grosor:p[1]||'',efecto:p[2]||'',ajuste:p[3]||'',orden:o};
+      }) : [];
+      const puntos = sec.puntos_text ? sec.puntos_text.split('\n').filter(Boolean) : [];
 
-        const { data: secData, error: secErr } = await db.from('secciones').insert({
-          sistema_id: sistemaId,
-          titulo: sec.titulo||'Sección',
-          puntos,
-          fuente: sec.fuente||null,
-          subsistema: sub.nombre,
-          orden: orden++
-        }).select().single();
-        if (secErr) throw secErr;
+      const { data: secData, error: secErr } = await db.from('secciones').insert({
+        sistema_id: sistemaId,
+        titulo: sec.titulo||'Sección',
+        puntos,
+        fuente: sec.fuente||null,
+        orden: orden++
+      }).select().single();
+      if (secErr) throw secErr;
 
-        if (tabla.length) {
-          await db.from('tabla_filas').insert(tabla.map(r=>({...r, seccion_id:secData.id})));
+      if (tabla.length) {
+        await db.from('tabla_filas').insert(tabla.map(r=>({...r, seccion_id:secData.id})));
+      }
+
+      if (sec.imgData) {
+        const ext = sec.imgData.name.split('.').pop();
+        const path = `${sistemaId}/${secData.id}-${Date.now()}.${ext}`;
+        const { error: upErr } = await db.storage.from(BUCKET).upload(path, sec.imgData, {upsert:true});
+        if (upErr) {
+          console.error('Error subiendo imagen:', upErr);
+          toast('Ficha guardada, pero la imagen falló: '+upErr.message, 'err');
+        } else {
+          const { data: urlData } = db.storage.from(BUCKET).getPublicUrl(path);
+          await db.from('imagenes').insert({seccion_id:secData.id, url:urlData.publicUrl, orden:0});
         }
-
-        if (sec.imgData) {
-          const ext = sec.imgData.name.split('.').pop();
-          const path = `${sistemaId}/${secData.id}-${Date.now()}.${ext}`;
-          const { error: upErr } = await db.storage.from(BUCKET).upload(path, sec.imgData, {upsert:true});
-          if (upErr) {
-            console.error('Error subiendo imagen:', upErr);
-            toast('Ficha guardada, pero la imagen falló: '+upErr.message, 'err');
-          } else {
-            const { data: urlData } = db.storage.from(BUCKET).getPublicUrl(path);
-            await db.from('imagenes').insert({seccion_id:secData.id, url:urlData.publicUrl, orden:0});
-          }
-        } else if (sec.existingUrl) {
-          await db.from('imagenes').insert({seccion_id:secData.id, url:sec.existingUrl, orden:0});
-        }
+      } else if (sec.existingUrl) {
+        await db.from('imagenes').insert({seccion_id:secData.id, url:sec.existingUrl, orden:0});
       }
     }
 
     toast(editingId ? 'Ficha actualizada ✓' : 'Ficha guardada ✓');
-    expandedId = sistemaId; subsysTabMap[sistemaId]=0;
+    expandedId = sistemaId;
     closeModal();
     await loadAll();
   } catch(err) {
