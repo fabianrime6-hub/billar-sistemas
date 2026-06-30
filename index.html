@@ -813,7 +813,10 @@ async function saveCard() {
           const ext = sec.imgData.name.split('.').pop();
           const path = `${sistemaId}/${secData.id}-${Date.now()}.${ext}`;
           const { error: upErr } = await db.storage.from(BUCKET).upload(path, sec.imgData, {upsert:true});
-          if (!upErr) {
+          if (upErr) {
+            console.error('Error subiendo imagen:', upErr);
+            toast('Ficha guardada, pero la imagen falló: '+upErr.message, 'err');
+          } else {
             const { data: urlData } = db.storage.from(BUCKET).getPublicUrl(path);
             await db.from('imagenes').insert({seccion_id:secData.id, url:urlData.publicUrl, orden:0});
           }
