@@ -207,18 +207,61 @@ aside.collapsed .nav-manage{opacity:0;pointer-events:none;}
 .subcat-row .cat-icon-btn{font-size:12px;padding:3px;}
 .subcat-add-row{display:flex;gap:6px;margin-top:4px;}
 .subcat-add-row input{flex:1;padding:5px 8px;font-size:12px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);}
+
+/* TABLE SCROLL WRAPPER */
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.table-scroll table{min-width:480px;}
+
+/* ===== RESPONSIVE (móvil/tablet) ===== */
+@media(max-width:768px){
+  header{padding:0 12px;gap:10px;}
+  .mobile-menu-btn{display:flex !important;align-items:center;justify-content:center;}
+  .logo{font-size:11px;}
+  .search-wrap{max-width:none;}
+  .add-btn-label{display:none;}
+  .add-btn{padding:8px 12px;}
+
+  .layout{position:relative;}
+  aside{
+    position:fixed;top:56px;left:0;bottom:0;z-index:90;
+    width:240px;background:var(--bg);
+    transform:translateX(-100%);transition:transform .22s ease;
+    box-shadow:2px 0 16px rgba(0,0,0,.4);
+  }
+  aside.mobile-open{transform:translateX(0);}
+  aside.collapsed{width:240px;padding:16px 10px;}
+  aside.collapsed .sidebar-label,aside.collapsed .nav-text,aside.collapsed .count{opacity:1;display:inline;}
+  .sidebar-backdrop{display:none;position:fixed;inset:56px 0 0 0;background:rgba(0,0,0,.5);z-index:80;}
+  .sidebar-backdrop.show{display:block;}
+
+  main{padding:16px;}
+  .grid{grid-template-columns:1fr;}
+  .card-thumb,.card-thumb-placeholder{height:170px;}
+
+  .modal-overlay{padding:0;}
+  .modal{max-width:100%;width:100%;min-height:100%;border-radius:0;padding:18px;}
+  .modal [style*="grid-template-columns:1fr 1fr 1fr"]{grid-template-columns:1fr !important;}
+  .modal [style*="grid-template-columns:70px 1fr"]{grid-template-columns:1fr !important;}
+
+  .sec-content{padding:14px;}
+  table{font-size:11px;}
+  th,td{padding:6px 7px;}
+}
 </style>
 </head>
 <body>
 
 <header>
+  <button class="mobile-menu-btn" onclick="toggleSidebar()" style="display:none;background:none;border:1px solid var(--border);border-radius:8px;width:34px;height:34px;color:var(--text);font-size:16px;cursor:pointer;flex-shrink:0;">☰</button>
   <div class="logo">Billar<span>/</span>Sistemas</div>
   <div class="search-wrap">
     <span class="search-icon">⌕</span>
     <input type="text" id="searchInput" placeholder="Buscar sistema, efecto, zona…" oninput="filterCards()">
   </div>
-  <button class="add-btn" onclick="openModal()">＋ Nueva ficha</button>
+  <button class="add-btn" onclick="openModal()">＋ <span class="add-btn-label">Nueva ficha</span></button>
 </header>
+
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
 
 <div class="layout">
   <aside id="sidebar">
@@ -338,9 +381,16 @@ let secCounter = 0;
 
 // ── SIDEBAR COLLAPSE ───────────────────────────────────────────
 let sidebarCollapsed = false;
+function isMobile(){ return window.innerWidth <= 768; }
 function toggleSidebar() {
-  sidebarCollapsed = !sidebarCollapsed;
   const aside = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (isMobile()) {
+    const open = aside.classList.toggle('mobile-open');
+    backdrop.classList.toggle('show', open);
+    return;
+  }
+  sidebarCollapsed = !sidebarCollapsed;
   const btn = aside.querySelector('.collapse-btn');
   aside.classList.toggle('collapsed', sidebarCollapsed);
   btn.textContent = sidebarCollapsed ? '▶' : '◀';
@@ -411,6 +461,7 @@ function filterCat(cat, el) {
   document.getElementById('sectionTitle').textContent = cat === 'all' ? 'Todos los sistemas' : (found ? found.nombre : cat);
   renderSidebar();
   render();
+  if (isMobile()) toggleSidebar();
 }
 function filterSub(subId, el) {
   curSub = subId; expandedId = null;
@@ -533,10 +584,12 @@ function render() {
           <div class="sec-layout">
             ${imgHtml}
             <div>
-              <table>
-                <thead><tr><th>Posición</th><th>Grosor/Toque</th><th>Efecto</th><th>Ajuste</th></tr></thead>
-                <tbody>${rows||'<tr><td colspan="4" style="color:var(--muted);font-style:italic">Sin datos</td></tr>'}</tbody>
-              </table>
+              <div class="table-scroll">
+                <table>
+                  <thead><tr><th>Posición</th><th>Grosor/Toque</th><th>Efecto</th><th>Ajuste</th></tr></thead>
+                  <tbody>${rows||'<tr><td colspan="4" style="color:var(--muted);font-style:italic">Sin datos</td></tr>'}</tbody>
+                </table>
+              </div>
               <div class="key-points"><h4>Puntos clave</h4>${kps||'<span style="color:var(--muted);font-size:12px">Sin puntos aún</span>'}</div>
             </div>
           </div>
